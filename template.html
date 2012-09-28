@@ -1,0 +1,720 @@
+<!--
+Google IO 2012 HTML5 Slide Template
+
+Authors: Eric Bidelman <ebidel@gmail.com>
+         Luke Mahé <lukem@google.com>
+
+URL: https://code.google.com/p/io-2012-slides
+-->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Deadsimple JRuby troubleshooting</title>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="chrome=1">
+  <!--<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">-->
+  <!--<meta name="viewport" content="width=device-width, initial-scale=1.0">-->
+  <!--This one seems to work all the time, but really small on ipad-->
+  <!--<meta name="viewport" content="initial-scale=0.4">-->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" media="all" href="theme/css/default.css">
+  <link rel="stylesheet" media="only screen and (max-device-width: 480px)" href="theme/css/phone.css">
+  <base target="_blank"> <!-- This amazingness opens all links in a new tab. -->
+  <script data-main="js/slides" src="js/require-1.0.8.min.js"></script>
+  <style>
+    span.highlight {background-color: #fff600;}
+  </style>
+</head>
+<body style="opacity: 0">
+
+<slides class="layout-widescreen">
+
+  <!--
+  <slide class="segue dark quote nobackground">
+    <article class="flexbox auto-fadein vcenter">
+      <q>Does it Scale?</q>
+    </article>
+  </slide>
+
+  <slide class="segue dark quote nobackground">
+    <article class="flexbox auto-fadein vcenter">
+      <q>Does it <span style="text-decoration: line-through;">Scale</span> ThreadSafe?</q>
+    </article>
+  </slide>
+  -->
+
+  <slide class="nobackground">
+    <article class="flexbox vcenter">
+      <h1><span><img src="images/ruby-shift-logo.png"></span></h1>
+      <h3>Kiev 2012</h3>
+    </article>
+  </slide>
+
+  <slide class="title-slide segue nobackground">
+    <!-- The content of this hgroup is replaced programmatically through the slide_config.json. -->
+    <hgroup class="auto-fadein">
+      <h1 data-config-title><!-- populated from slide_config.json --></h1>
+      <h2 data-config-subtitle><!-- populated from slide_config.json --></h2>
+      <p data-config-presenter><!-- populated from slide_config.json --></p>
+      <br>
+      <br>
+      <br>
+      <br>
+    </hgroup>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Agenda</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>Why JRuby?</li>
+        <li>Unix and JVM tools for debugging JRuby</li>
+        <li>Our issues with JRuby in production</li>
+        <li>Current state of art</li>
+      </ul>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Why JRuby? Our Requirements</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>Single-process application</li>
+        <li>Shared memory</li>
+        <li>Ability to use native-threads</li>
+      </ul>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Production Configuration</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>JRuby 1.6.5(later updated to 1.6.7)</li>
+        <li>Kirk as application server(Jetty-based)<br>
+          <a href="https://github.com/strobecorp/kirk">https://github.com/strobecorp/kirk</a>
+        </li>
+        <li>Akka 1.3 - as Actor-library</li>
+        <li>Java - OpenJDK 6</li>
+        <li>Upstart for daemonizing</li>
+        <li>Ubuntu 10.04</li>
+      </ul>
+    </article>
+  </slide>
+
+<!-- begin -->
+  <slide>
+    <hgroup>
+      <h2>Useful Unix-tools</h2>
+    </hgroup>
+    <article>
+      <p>Can be used for debugging any Unix-process:</p>
+      <ul>
+        <li><b>ps</b> and <b>top</b> - find information about required process(es)</li>
+        <li><b>strace</b> - tracing all kernel-calls from process</li>
+        <li><b>lsof</b> - observe all opened sockets/files</li>
+        <li><b>netstat</b> - monitoring all network activities(interfere with <b>lsof</b>)</li>
+        <li><b>tcpdump/wireshark</b> - dump and investigation of all network traffic</li>
+      </ul>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>lsof - list open files</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>Observe all open files/sockets for process</li>
+        <li>Observe all opened files in your system</li>
+        <li>Find-out where all your logs are written</li>
+        <li>Often used in combination with <b>strace</b></li>
+      </ul>
+      <p>Usage:
+      <pre class="prettyprint" data-lang="bash">
+$ sudo lsof -p &lt;PID&gt;</pre>
+      </p>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>lsof usage example</h2>
+    </hgroup>
+    <article>
+<pre class="prettyprint" data-lang="bash">
+$ sudo lsof -p 21647
+COMMAND   PID   USER   FD   TYPE    DEVICE SIZE/OFF      NODE NAME
+java    21647 ubuntu  cwd    DIR       8,1     4096    321163 /home/ubuntu
+java    21647 ubuntu  rtd    DIR       8,1     4096         2 /
+java    21647 ubuntu  txt    REG       8,1    39584      9436 /usr/lib/jvm/java-6-openjdk/jre/bin/java
+java    21647 ubuntu  mem    REG       8,1   105288    295079 /lib/x86_64-linux-gnu/libresolv-2.15.so
+java    21647 ubuntu  mem    REG       8,1    31104    297067 /lib/x86_64-linux-gnu/libnss_dns-2.15.so
+java    21647 ubuntu  mem    REG       8,1   424384      9408 /usr/lib/nss/libfreebl3.so
+...
+java    21647 ubuntu    0u   CHR       1,3      0t0       735 /dev/null
+java    21647 ubuntu    <span style="background-color: #fff600">1w</span>   REG       8,1   636410    297370 <span style="background-color: #fff600">/var/www/app/rails/log/kirk.log</span>
+java    21647 ubuntu    2w   CHR       1,3      0t0       735 /dev/null
+....
+java    21647 ubuntu   <span style="background-color: #fff600">42u</span>  IPv6 146353046      0t0       TCP 127.0.0.1:49872-&gt;127.0.0.1:postgresql (ESTABLISHED)
+...
+java    21647 ubuntu   64u  IPv6 146353326      0t0       TCP localhost:3000 (LISTEN)
+java    21647 ubuntu   65u  IPv6 149554050      0t0       TCP 127.0.0.1:37047-&gt;127.0.0.1:6379 (CLOSE_WAIT)</pre>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>strace</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>Trace system-calls
+          <ul>
+            <li>open/close file/socket</li>
+            <li>read/write to open file/socket</li>
+            <li>write to stdout/stderr</li>
+          </ul>
+        </li>
+        <li>Great for debugging process start-up issues</li>
+        <li>Get a clue why your process stuck</li>
+        <li>Can trace sub-process and threads</li>
+      </ul>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>strace usage for JRuby</h2>
+    </hgroup>
+    <article>
+      <p>Usage:
+      <pre class="prettyprint" data-lang="bash">
+$ sudo strace -e trace='!gettimeofday,clock_gettime,futex' -fp &lt;PID&gt;
+#
+# -e trace='!...' - skip trace of these calls
+# -f - trace childs and threads
+# -p - with PID
+</pre>
+      </p>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>lsof + strace: demo</h2>
+    </hgroup>
+    <article>
+      <p>Run in <b>irb</b> next query:
+      <pre class="prettyprint" data-lang="sql">
+ActiveRecord::Base.connection.execute('SELECT pg_sleep(10000)')</pre>
+      Find appropriate process PID:
+      <pre class="prettyprint" data-lang="bash">
+$ jps -l
+13690 sun.tools.jps.Jps
+<span class="highlight">13356 org.jruby.Main</span></pre>
+Run Strace:
+      <pre class="prettyprint" data-lang="bash">
+$ sudo strace -fp <span class="highlight">13356</span> -e trace='!gettimeofday,futex,clock_gettime'
+Process 13356 attached with 12 threads - interrupt to quit
+[pid 13372] restart_syscall(&lt;... resuming interrupted call ...&gt; &lt;unfinished ...&gt;
+[pid 13362] <span class="highlight">recv(15</span>,  &lt;unfinished ...&gt;
+[pid 13365] restart_syscall(&lt;... resuming interrupted call ...&gt; &lt;unfinished ...&gt;
+[pid 13372] &lt;... restart_syscall resumed&gt; ) = -1 ETIMEDOUT (Connection timed out)</pre>
+      </p>
+
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>lsof + strace: demo</h2>
+    </hgroup>
+    <article>
+      <p><b>lsof</b> in da house:
+      <pre class="prettyprint" data-lang="bash">
+$ sudo lsof -p <span class="highlight">13356</span>
+COMMAND   PID USER   FD   TYPE     DEVICE SIZE/OFF    NODE NAME
+...
+java    13356 cris    0u   CHR      136,9      0t0      12 /dev/pts/9
+java    13356 cris    1u   CHR      136,9      0t0      12 /dev/pts/9
+java    13356 cris    2u   CHR      136,9      0t0      12 /dev/pts/9
+java    13356 cris    3r   REG        8,6 62447715 2232993 /usr/lib/jvm/java-7-oracle/jre/lib/rt.jar
+java    13356 cris    4r   REG        8,6 10017442 3419090 /home/cris/.rvm/rubies/jruby-1.6.7/lib/jruby.jar
+java    13356 cris    5r   REG        8,6   575675 2239123 /usr/lib/jvm/java-7-oracle/jre/lib/jsse.jar
+java    13356 cris    6r   CHR        1,8      0t0    5953 /dev/random
+java    13356 cris    7u  unix 0xefb78240      0t0  905568 socket
+java    13356 cris    8r   CHR        1,9      0t0    5954 /dev/urandom
+...
+java    13356 cris   14u  unix 0xc583aac0      0t0  906952 socket
+java    13356 cris   <span class="highlight">15u</span>  IPv6     906954      0t0     TCP <span class="highlight">localhost:59814-&gt;localhost:postgresql</span> (ESTABLISHED)
+</pre>
+      </p>
+
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Issue #1: limited performance</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>At first we started from Amazon Large instance</li>
+        <li>We didn't get required performance during load-testing</li>
+        <li>Next we tried XL-instance and it didn't help</li>
+        <li>Then we realized our Kirk-process used only 512Mb</li>
+        <li>Setting <b>JRUBY_OPTS="-J-Xmx2048m"</b> increased maximum allowed memory and resolved issue</li>
+      </ul>
+      <p><b>Tool for debug</b>: <b>top</b></p>
+      <p><b>Lessons learned</b>: learn JVM configuration parameters, it can be handy</p>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Issue #2: slow connection to Postgres</h2>
+    </hgroup>
+    <article>
+      <b>Symptoms</b>:
+      <ul>
+        <li>Everything went good in development environment</li>
+        <li>In production environment our DB and Application were
+        on different hosting-platform</li>
+        <li>When we run application it looks like it totally stuck</li>
+        <li>But after ~20 seconds it started responding</li>
+      </ul>
+      <p><b>Tools for debug</b>: <b>tcpdump/wireshark</b></p>
+      <b>Debugging</b>: 
+      <ul>
+        <li>plain traffic sniffing with <b>tcpdump</b> and analysis in <b>wireshark</b> showed JRuby sends many spam-selects to Postgres</li>
+        <li>This issue was known and update of postgres jdbc gem fixed it</li>
+      </ul>
+      <p><b>Lessons learned</b>: use updated gems and JRuby</p>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>JVM-toolbox</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>Useful for debugging any JVM-language: Java, JRuby, Clojure, Scala, Groovy</li>
+        <li>Out of the box tools: jps, jconsole, jvisualvm, jstack, jdb, jmap, jhat, jstat, jstatd</li>
+        <li>Dozens of free and commercial third-party tools: MAT, YourKit, ...</li>
+      </ul>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Useful JVM-tools</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li><b>jps -l</b> - show all JVM-processes for current user</li>
+        <li><b>jstack</b> - get stacktrace of all running threads</li>
+        <li><b>jvisualvm</b> - monitoring different JVM activities: running threads, memory consumption, GC, and allow to obtain JRuby stacktraces</li>
+        <li><b>jdb</b> - Java Debugger</li>
+        <li><b>jmap</b> - obtain heap-dump of running JRuby process</li>
+        <li><b>MAT</b> - Eclipse Memory Analyzer. Incredible for debugging memory-leaks and other runtime-related issues</li>
+      </ul>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>VisualVm (jvisualvm)</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>One of the killer-app for JRuby</li>
+        <li>Get common information about JVM-process runtime</li>
+        <li>Work with local and remote JVM-process</li> 
+        <li>Monitoring memory consumption and GC</li>
+        <li>Monitoring running threads activity</li>
+        <li>Can create HeapDump of running process</li>
+        <li>Charles Nutter wrote good introduction to VisualVM:<br> <a href="http://bit.ly/OsaFkA">http://bit.ly/OsaFkA</a></li>
+        <li>VisualVM deserves its own talk!</li>
+        <li><b>Obtaining JRuby stacktraces</b></li>
+      </ul>
+    </article>
+  </slide>
+
+  <slide>
+    <article>
+    <img src="images/screen/visualvm-memory.png">
+    </article>
+  </slide>
+
+  <slide>
+    <article>
+    <img src="images/screen/visualvm-threads.png">
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>VisualVm: obtaining JRuby stacktrace </h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>Most useful VisualVM feature for troubleshooting!</li>
+        <li>JRuby stacktrace is incredebly useful when JRuby thread stuck</li>
+        <li>Stacktrace in 90% of cases is all you need to find the cause of issue!</li>
+      </ul>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Recipe: JRuby stacktrace in VisualVM</h2>
+    </hgroup>
+    <article>
+       <p>1. Run VisualVM:
+       <pre class="prettyprint" data-lang="bash">
+# Run jvisualvm under the same user as for jruby-process
+$ jvisualvm</pre></p>
+       <p>2. Install "VisualVM-MBeans" plugin:
+       <pre>
+Tools &gt; Plugins &gt; Available Plugins
+Check "VisualVM-MBeans" and click "Install"
+Reload VisualVM</pre>
+       </p>
+       <p>3. Run JRuby with "--manage" option:
+       <pre class="prettyprint" data-lang="bash">
+$ export JRUBY_OPTS="--manage"
+$ rails s</pre></p>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Recipe: JRuby stacktrace in VisualVM</h2>
+    </hgroup>
+    <article>
+       <p>4. Open appropriate JRuby-process in "Applications &gt; Local" toolbar</p>
+       <p>5. Open "MBeans" in right-toolbar and select
+       <pre>
+org.jruby &gt; Runtime &gt; SomeNumber &gt; Runtime</pre></p>
+       <p>6. And last step:
+       <pre>Operations &gt; Thread Dump</pre></p>
+    </article>
+  </slide>
+
+  <slide>
+    <img src="images/screen/visualvm-stacktrace.png">
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>JRuby stacktrace via VisualVM!</h2>
+    </hgroup>
+    <article>
+    <img src="images/screen/visualvm-result.png">
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>jstack or kill -QUIT</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>Useful for obtaining Java-stacktrace of running JRuby thread</li>
+        <li>Requires some knowledge of Java and JRuby-internals</li>
+        <li><b>jstack</b> prints its output right into your console
+        <br>Run it under the same user as JRuby-process owner(or via su/sudo)!
+        </li>
+        <li><b>kill -QUIT &lt;PID&gt;</b> prints its output into process <b>stdout</b></li>
+      </ul>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Example: "jstack" or "kill -QUIT"</h2>
+    </hgroup>
+    <article class="smaller">
+      <pre class="prettyprint" data-lang="bash">
+$ ps -aux | grep jruby
+ ubuntu     <span class="highlight">20071</span>  0.0  2.6 718612 81360 pts/0    Sl+  Sep26   0:48 /usr/lib/jvm/java-7-oracle/bin/java ...
+ ubuntu     29775  0.0  0.0   4372   832 pts/8    S+   16:15   0:00 grep jruby
+$ kill -QUIT 20071
+# OR
+$ jstack <span class="highlight">20071</span>
+2012-09-27 16:19:08
+Full thread dump Java HotSpot(TM) Server VM (23.3-b01 mixed mode):
+
+"RMI TCP Connection(16)-127.0.0.1" daemon prio=10 tid=0x8cc08400 nid=0x7451 runnable [0x8bbf9000]
+   java.lang.Thread.State: RUNNABLE
+...
+"main" prio=10 tid=0xb6506c00 nid=0x4e6d runnable [0xb68a4000]
+   java.lang.Thread.State: RUNNABLE
+    at <span class="highlight">java.io.FileInputStream.read(Native Method)</span>
+    at jline.Terminal.readCharacter(Terminal.java:99)
+    at jline.UnixTerminal.readVirtualKey(UnixTerminal.java:122)
+    at jline.ConsoleReader.readVirtualKey(ConsoleReader.java:1606)
+    at jline.ConsoleReader.readBinding(ConsoleReader.java:764)
+    at jline.ConsoleReader.readLine(ConsoleReader.java:511)
+    at jline.ConsoleReader.readLine(ConsoleReader.java:457)
+    at <span class="highlight">org.jruby.ext.Readline.s_readline(Readline.java:237)</span>
+    at org.jruby.ext.Readline$s$s_readline.call(Readline$s$s_readline.gen:65535)
+    at org.jruby.runtime.callsite.CachingCallSite.cacheAndCall(CachingCallSite.java:332)
+...
+</pre>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Issue #3: Rails 3.1 ain't thread-safe</h2>
+    </hgroup>
+    <article>
+      <b>Symptoms:</b>
+      <ul>
+        <li>All Rails-worker threads stuck</li>
+        <li>Kirk can't process any application requests</li>
+        <li>Only JVM-threads stay active</li>
+      </ul>
+      <p><b>Tools for debug</b>: <b>jstack</b>, <b>VisualVM</b></p>
+      <b>Debugging</b>:
+      <ul>
+        <li><b>jstack</b> showed that all JRuby threads are waiting for Mutex</li>
+        <li>We obtained JRuby-stacktrace via <b>VisualVm</b></li>
+        <li>Stacktrace points us to connection_pool.rb</li>
+        <li>Scrutiny code review of this file revealed nasty bugs in mutex logic</li>
+        <li>Gist with Fix: <a href="https://gist.github.com/2658680">https://gist.github.com/2658680</a></li>
+      </ul>
+      <p><b>Lessons learned</b>: Rails isn't thread-safe</p>
+    </article>
+  </slide>
+
+  <slide class="segue dark quote nobackground">
+    <article class="flexbox auto-fadein vcenter">
+      <q>Dream about Magic Debugging Tool</q>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Magic Debugging Tool</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>Ability to investigate the whole running runtime</li>
+        <li>All running threads</li>
+        <li>Ability to obtain access to all objects and properties</li>
+        <li>Ability to jump into any JRuby Frame</li>
+      </ul>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>jdb - Java Debugger</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>Can sneak into any JVM-process</li>
+        <li>Can investigate all threads</li>
+        <li>But it require deep knowledge of JRuby-internals and it's hard to obtain access to complex data structure</li>
+      </ul>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>MAT - Eclipse Memory Analyzer</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>MAT - <a href="http://www.eclipse.org/mat/downloads.php">http://www.eclipse.org/mat/downloads.php</a>
+        <li>The simplest memory-leak detection tool</li>
+        <li>The simplest debugging tool
+          <ul>
+            <li>Shows all environment for running threads</li>
+            <li>Allows to observe any object on JVM heap</li>
+            <li>Require some basic knowledge of JRuby internals</li>
+          </ul>
+        </li>
+        <li>Deserve for two distinct talks</li>
+      </ul>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>MAT usage</h2>
+    </hgroup>
+    <article>
+      <p>1. Obtain heap-dump via: <b>jmap</b> or <b>VisualVm</b>:
+      <pre class="prettyprint" data-lang="bash">
+# normal way
+$ jmap -dump:live,format=b,file=snapshot.hprof &lt;PID&gt;
+
+# forced way(when process doesn't respond)
+$ jmap -dump:format=b,file=snapshot.hprof -F &lt;PID&gt;</pre></p>
+      <p>2. Feed it into MAT:
+      <pre>
+File &gt; Open Heap Dump</pre>
+      </p>
+    </article>
+  </slide>
+
+  <slide>
+    <img src="images/screen/mat-java-threads.png">
+  </slide>
+
+  <slide>
+    <img src="images/screen/mat-heap.png">
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Issue #4: Locks on Postgres transaction</h2>
+    </hgroup>
+    <article>
+      <b>Symptoms:</b>
+      <ul>
+        <li>One by one worker-threads became locked until all server stuck</li>
+      </ul>
+      <p><b>Tools for debug</b>: <b>jstack</b>, <b>jmap</b>, <b>MAT</b></p>
+      <b>Debugging</b>:
+      <ul>
+        <li><b>jstack</b> showed that part of JRuby threads are waiting for response from Postgres, and part of JRuby threads are waiting for mutex</li>
+        <li>But it was not clear, what kind of queries produce such behavior</li>
+        <li>We did HeapDump with <b>jmap</b> and fed it into <b>MAT</b></li>
+        <li>Going up by JRuby frames we managed to find actual SQL-query</li>
+        <li>Reason was in tricky deadlock with combination of PG-transaction and our mutex logic</li>
+      </ul>
+      <p><b>Lessons learned</b>: avoid using mutexes, prefer non-blocking actors</p>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Issue #5: autoload isn't threadsafe</h2>
+    </hgroup>
+    <article>
+      <b>Symptoms:</b>
+      <ul>
+        <li>Time-to-time after deploy we got random errors with AR models</li>
+        <li>It looked like some part of model isn't presented at all</li>
+      </ul>
+      <p><b>Tools for debug</b>: <b>brain</b></p>
+      <b>Debugging</b>:
+      <ul>
+        <li>Having multithreaded environment we understood it can be a reason</li>
+        <li>Main issue can be when Ruby-class is under construction and some object is created in parallel thread</li>
+        <li>We reproduced this behavior even in MRI 1.9.3</li>
+        <li>The main reason was in gem with "autoload"-s</li>
+      </ul>
+      <p><b>Fix</b>: explicitly list all autoloaded classes in initializer</p>
+      <p><b>Lessons learned</b>: all Ruby-classes should be loaded before going into multithreaded mode</p>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Summary: Why JRuby thread can stuck?</h2>
+    </hgroup>
+    <article>
+    <ul>
+      <li>Waiting on blocking system call [<b>jstack</b>/(<b>strace</b> + <b>lsof</b>)]
+      <ul>
+        <li>Waiting on response from Database</li>
+        <li>Trying to reach some file on broken FS</li>
+        <li>Trying to read/write from file/socket(operation without timeout)</li>
+      </ul>
+      </li>
+      <li>Waiting for Mutex [<b>jstack</b>, <b>jvisualvm</b>]</li>
+    </ul>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>New Recommended Configuration</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>JRuby 1.7.0(when it will be released)<br>
+          <ul><li>1.7.0preview2 is about 30% faster then 1.6.7</li></ul>
+        </li>
+        <li>Java - OpenJDK 7
+          <ul><li>invokedynamic on new Java doesn't show any speed improvements</li></ul>
+        </li>
+        <li>Actors via: Akka or Celluloid
+          <ul>
+            <li>Avoid writting home-made mutex-logic</li>
+            <li>Prefer using some non-blocking Actor-solution</li>
+            <li>We moved our Airbrake-notificator into actor</li>
+          </ul>
+        </li>
+        <li>Application server: Trinidad or Jetpack
+          <ul>
+            <li>Trinidad(Tomcat-based): <a href="http://thinkincode.net/trinidad/">http://thinkincode.net/trinidad/</a></li>
+            <li>Jetpack(Jetty-based): <a href="https://github.com/square/jetpack">https://github.com/square/jetpack</a></li>
+          </ul>
+        </li>
+        <li>Ubuntu 12.04
+          <ul><li>New Upstart with many appealing improvements</li></ul>
+        </li>
+      </ul>
+    </article>
+  </slide>
+
+  <slide>
+    <hgroup>
+      <h2>Current State of Business</h2>
+    </hgroup>
+    <article>
+      <ul>
+        <li>JRuby works very well and stable</li>
+        <li>We are waiting for release of JRuby 1.7.0</li>
+        <li>And you can try JRuby if it meets your requirements</li>
+      </ul>
+    </article>
+  </slide>
+
+  <slide class="thank-you-slide segue nobackground">
+    <article class="flexbox vleft auto-fadein">
+      <h2>&lt;Thank You!&gt;</h2>
+    </article>
+    <p class="auto-fadein" data-config-contact>
+      <!-- populated from slide_config.json -->
+    </p>
+  </slide>
+
+  <slide class="backdrop"></slide>
+
+</slides>
+
+<!--
+<script>
+var _gaq = _gaq || [];
+_gaq.push(['_setAccount', 'UA-XXXXXXXX-1']);
+_gaq.push(['_trackPageview']);
+
+(function() {
+  var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+  ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+  var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+})();
+</script>
+-->
+
+<!--[if IE]>
+  <script src="http://ajax.googleapis.com/ajax/libs/chrome-frame/1/CFInstall.min.js"></script>
+  <script>CFInstall.check({mode: 'overlay'});</script>
+<![endif]-->
+</body>
+</html>
