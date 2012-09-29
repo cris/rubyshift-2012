@@ -493,7 +493,7 @@ Full thread dump Java HotSpot(TM) Server VM (23.3-b01 mixed mode):
         <li>Scrutiny code review of this file revealed nasty bugs in mutex logic</li>
         <li>Gist with Fix: <a href="https://gist.github.com/2658680">https://gist.github.com/2658680</a></li>
       </ul>
-      <p><b>Lessons learned</b>: Rails isn't thread-safe</p>
+      <p><b>Lessons learned</b>: pay closer attention to thread-safety in your gems</p>
     </article>
   </slide>
 
@@ -537,6 +537,7 @@ Full thread dump Java HotSpot(TM) Server VM (23.3-b01 mixed mode):
     <article>
       <ul>
         <li>MAT - <a href="http://www.eclipse.org/mat/downloads.php">http://www.eclipse.org/mat/downloads.php</a>
+        <li>Real JRuby killep-app!</li>
         <li>The simplest memory-leak detection tool</li>
         <li>The simplest debugging tool
           <ul>
@@ -545,7 +546,7 @@ Full thread dump Java HotSpot(TM) Server VM (23.3-b01 mixed mode):
             <li>Require some basic knowledge of JRuby internals</li>
           </ul>
         </li>
-        <li>Deserve for two distinct talks</li>
+        <li>Deserves for two distinct talks</li>
       </ul>
     </article>
   </slide>
@@ -679,7 +680,8 @@ File &gt; Open Heap Dump</pre>
     <article>
       <ul>
         <li>JRuby works very well and stable</li>
-        <li>We are waiting for release of JRuby 1.7.0</li>
+        <li>Actors and threads benefeat us with lower latency on IO-waiting</li>
+        <li>No need to use background workers - instead we use actors</li>
         <li>And you can try JRuby if it meets your requirements</li>
       </ul>
     </article>
